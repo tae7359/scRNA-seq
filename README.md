@@ -1,3 +1,11 @@
+```r
+library(Seurat)
+library(tidyverse)
+
+base_dir <- "C:/Users/ION/Documents"
+sample_id <- "Donor1"
+```
+
 #C:/Users/ION/Documents에 Donor 1~4 폴더들에 각각 h5파일들 넣어 세팅
 
 #mkdir Donor1
