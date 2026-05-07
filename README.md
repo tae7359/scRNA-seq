@@ -6,6 +6,7 @@ base_dir <- "C:/Users/ION/Documents"
 sample_id <- "Donor1"
 ```
 
+```r
 #C:/Users/ION/Documents에 Donor 1~4 폴더들에 각각 h5파일들 넣어 세팅
 
 #mkdir Donor1
@@ -502,3 +503,4 @@ saveRDS(
   donor_filtered,
   file.path(out_dir, paste0(sample_id, "_Seurat_processed.rds"))
 )
+```
