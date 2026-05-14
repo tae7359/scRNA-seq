@@ -1,3 +1,8 @@
+```r
+library(Seurat)
+library(tidyverse)
+```
+
 setwd("C:/Users/ION/Documents/resolution0.1")
 library(Seurat)
 library(hdf5r)
