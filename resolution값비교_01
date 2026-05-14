@@ -1,0 +1,271 @@
+setwd("C:/Users/ION/Documents/resolution0.1")
+library(Seurat)
+library(hdf5r)
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+library(Matrix)
+
+dir.create("data", showWarnings = FALSE)
+dir.create("results", showWarnings = FALSE)
+dir.create("results/plots", recursive = TRUE, showWarnings = FALSE)
+dir.create("results/tables", recursive = TRUE, showWarnings = FALSE)
+dir.create("results/objects", recursive = TRUE, showWarnings = FALSE)
+
+white_theme <- theme(
+  plot.background = element_rect(fill = "white", colour = NA),
+  panel.background = element_rect(fill = "white", colour = NA),
+  legend.background = element_rect(fill = "white", colour = NA),
+  legend.box.background = element_rect(fill = "white", colour = NA)
+)
+
+save_gg <- function(plot, filename, width = 7, height = 5, dpi = 300) {
+  ggsave(
+    filename = file.path("results/plots", filename),
+    plot = plot & white_theme,
+    width = width,
+    height = height,
+    dpi = dpi,
+    bg = "white"
+  )
+}
+
+####################################
+data_path <- "data/filtered_feature_bc_matrix.h5"file.exists(data_path)counts <- Read10X_h5(data_path)
+
+#####################################
+counts
+View(counts)
+
+####################################
+pbmc <- CreateSeuratObject(
+counts = counts,
+project = "PBMC_Donor1",
+min.cells = 3,
+min.features = 200
+)
+pbmc
+
+###############################
+pbmc[["percent.mt"]] <- PercentageFeatureSet(
+pbmc,
+pattern = "^MT-"
+)
+head(pbmc@meta.data)
+
+############################
+summary(pbmc$nFeature_RNA)
+summary(pbmc$nCount_RNA)
+summary(pbmc$percent.mt)
+
+#######################
+p_vln_before <- VlnPlot(pbmc,features = c("nFeature_RNA", "nCount_RNA", "percent.mt"),ncol = 3)print(p_vln_before)save_gg(p_vln_before,"01_QC_VlnPlot_before_filtering.png",width = 10,height = 8)
+########################
+p_scatter_before_1 <- FeatureScatter(
+  pbmc,
+  feature1 = "nCount_RNA",
+  feature2 = "nFeature_RNA"
+)
+
+p_scatter_before_2 <- FeatureScatter(
+  pbmc,
+  feature1 = "nCount_RNA",
+  feature2 = "percent.mt"
+)
+
+p_scatter_before <- p_scatter_before_1 + p_scatter_before_2
+
+print(p_scatter_before)
+
+save_gg(
+  p_scatter_before,
+  "03_QC_Scatter_before_filtering.png",
+  width = 12,
+  height = 5
+)
+
+##############
+pbmc_filtered <- subset(
+pbmc,
+subset =
+nFeature_RNA > 200 &
+nFeature_RNA < 6000 &
+percent.mt < 10
+)
+pbmc_filtered
+
+##################
+summary(pbmc_filtered$nFeature_RNA)
+summary(pbmc_filtered$nCount_RNA)
+summary(pbmc_filtered$percent.mt)
+
+############
+p_vln_after <- VlnPlot(
+  pbmc_filtered,
+  features = c("nFeature_RNA", "nCount_RNA", "percent.mt"),
+  ncol = 3
+)
+
+print(p_vln_after)
+
+save_gg(
+  p_vln_after,
+  "02_QC_VlnPlot_after_filtering.png",
+  width = 10,
+  height = 8
+)
+
+###############
+p_scatter_after_1 <- FeatureScatter(
+  pbmc_filtered,
+  feature1 = "nCount_RNA",
+  feature2 = "nFeature_RNA"
+)
+
+p_scatter_after_2 <- FeatureScatter(
+  pbmc_filtered,
+  feature1 = "nCount_RNA",
+  feature2 = "percent.mt"
+)
+
+p_scatter_after <- p_scatter_after_1 + p_scatter_after_2
+
+print(p_scatter_after)
+
+save_gg(
+  p_scatter_after,
+  "04_QC_Scatter_after_filtering.png",
+  width = 12,
+  height = 5
+)
+#############
+
+pbmc_filtered <- NormalizeData(pbmc_filtered)
+pbmc_filtered
+
+############
+pbmc_filtered <- FindVariableFeatures(
+pbmc_filtered,
+selection.method = "vst",
+nfeatures = 2000
+)
+head(VariableFeatures(pbmc_filtered), 20)
+pbmc_filtered
+
+##############
+pbmc_filtered <- ScaleData(pbmc_filtered)
+pbmc_filtered
+
+#################
+pbmc_filtered <- RunPCA(pbmc_filtered)
+print(pbmc_filtered[["pca"]], dims = 1:5, nfeatures = 5)
+#####################
+p_elbow <- ElbowPlot(
+  pbmc_filtered,
+  ndims = 50
+)
+
+print(p_elbow)
+
+save_gg(
+  p_elbow,
+  "06_ElbowPlot.png",
+  width = 7,
+  height = 5
+)
+################
+pbmc_filtered <- FindNeighbors(
+pbmc_filtered,
+dims = 1:10
+)
+##############
+pbmc_filtered <- FindClusters( pbmc_filtered,
+resolution = 0.1 )
+#######
+pbmc_filtered <- RunUMAP(
+pbmc_filtered,
+dims = 1:10
+)
+############
+p_umap_cluster <- DimPlot(
+  pbmc_filtered,
+  reduction = "umap",
+  label = TRUE
+)
+
+print(p_umap_cluster)
+
+save_gg(
+  p_umap_cluster,
+  "07_UMAP_clusters.png",
+  width = 7,
+  height = 6
+)
+###########
+pbmc_markers <- FindAllMarkers(
+pbmc_filtered,
+only.pos = TRUE,
+min.pct = 0.25,
+logfc.threshold = 0.25
+)
+head(pbmc_markers)
+##############
+top5_markers <- pbmc_markers %>%
+group_by(cluster) %>%
+slice_max(n = 5, order_by = avg_log2FC)
+top5_markers
+##############
+p_feature <- FeaturePlot(
+  pbmc_filtered,
+  features = c("IL7R", "MS4A1", "NKG7", "LYZ"),
+  ncol = 2
+)
+
+print(p_feature)
+
+save_gg(
+  p_feature,
+  "09_FeaturePlot_marker_genes.png",
+  width = 9,
+  height = 7
+)
+#################
+top10 <- pbmc_markers %>%
+group_by(cluster) %>%
+slice_max(n = 3, order_by = avg_log2FC)
+
+p_heatmap <- DoHeatmap(pbmc_filtered,features = top10$gene,size = 3) + NoLegend()print(p_heatmap)save_gg(p_heatmap,"10_Heatmap_top10_markers.png",width = 10,height = 10)
+###############
+marker_genes <- c(
+  "IL7R",
+  "CCR7",
+  "LTB",
+  "CD8A",
+  "NKG7",
+  "GNLY",
+  "GZMB",
+  "MS4A1",
+  "CD79A",
+  "LYZ",
+  "S100A8",
+  "FCGR3A",
+  "MS4A7",
+  "FCER1A",
+  "CST3",
+  "PPBP"
+)
+
+p_dot <- DotPlot(
+  pbmc_filtered,
+  features = marker_genes
+) + RotatedAxis()
+
+print(p_dot)
+
+save_gg(
+  p_dot,
+  "11_DotPlot_marker_genes.png",
+  width = 11,
+  height = 6
+)
+
